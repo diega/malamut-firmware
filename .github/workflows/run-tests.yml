@@ -1,0 +1,53 @@
+name: Run tests
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install ESP-IDF dependencies
+        run: |
+          sudo apt update
+          sudo apt install git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0 libdbus-1-dev libglib2.0-dev libgcrypt20 libpixman-1-0 libsdl2-2.0-0 libslirp0
+      - name: Clone Malamut repository
+        uses: actions/checkout@v4
+        with:
+          path: malamut
+      - name: Check ESP-IDF repository cache
+        uses: actions/cache@v4
+        id: esp-idf
+        with:
+         path: esp-idf
+         key: esp-idf # TODO(@diegoll): change this key to commit id to refresh on new esp-idf versions
+      - name: Clone ESP-IDF repository
+        if: steps.esp-idf.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: espressif/esp-idf
+          submodules: recursive
+          ref: v5.3.2
+          path: esp-idf
+      - name: Set IDF_TOOLS_PATH env variable
+        run: echo "IDF_TOOLS_PATH=${{ runner.workspace }}/espressif" >> $GITHUB_ENV
+      - name: Check ESP-IDF installation cache
+        uses: actions/cache@v4
+        id: espressif-install
+        with:
+          path: ${{ runner.workspace }}/espressif
+          key: espressif-install
+      - name: Install ESP-IDF
+        if: steps.esp-idf.outputs.cache-hit != 'true' || steps.espressif-install.outputs.cache-hit != 'true'
+        run: |
+          sh esp-idf/install.sh --enable-pytest esp32c3 1> /dev/null
+          python esp-idf/tools/idf_tools.py install qemu-xtensa qemu-riscv32 1> /dev/null
+      - name: Setup environment
+        run: |
+          source esp-idf/export.sh
+          env >> $GITHUB_ENV
+      - name: Build Malamut
+        run: idf.py build
+        working-directory: malamut
+      - name: Run tests
+        run: pytest
+        working-directory: malamut
