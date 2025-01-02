@@ -2,6 +2,9 @@ name: Run tests
 
 on: push
 
+env:
+  ESP_IDF_VERSION: v5.3.2
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -14,19 +17,27 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: malamut
+      - name: Get ESP-IDF commit ID for release
+        id: get_commit_id
+        run: |
+          REPO="espressif/esp-idf"
+          TAG="${{ env.ESP_IDF_VERSION}}"
+          RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/git/ref/tags/$TAG")
+          COMMIT_ID=$(echo "$RESPONSE" | jq -r '.object.sha')
+          echo "ESP_IDF_COMMIT_ID=$COMMIT_ID" >> $GITHUB_ENV
       - name: Check ESP-IDF repository cache
         uses: actions/cache@v4
         id: esp-idf
         with:
          path: esp-idf
-         key: esp-idf # TODO(@diegoll): change this key to commit id to refresh on new esp-idf versions
+         key: ${{ env.ESP_IDF_COMMIT_ID }}
       - name: Clone ESP-IDF repository
         if: steps.esp-idf.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
         with:
           repository: espressif/esp-idf
           submodules: recursive
-          ref: v5.3.2
+          ref: ${{ env.ESP_IDF_VERSION}}
           path: esp-idf
       - name: Set IDF_TOOLS_PATH env variable
         run: echo "IDF_TOOLS_PATH=${{ runner.workspace }}/espressif" >> $GITHUB_ENV
